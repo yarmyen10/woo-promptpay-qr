@@ -1,0 +1,100 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+/**
+ * Class PromptPay_Slip_Verify
+ * ตรวจสอบสลิปผ่าน SlipOK API หรือบันทึกรอ Admin อนุมัติ
+ */
+class PromptPay_Slip_Verify {
+
+    private const SLIPOK_API = 'https://api.slipok.com/api/line/apikey/';
+
+    private string $api_key;
+
+    public function __construct() {
+        $this->api_key = (string) get_option( 'promptpay_slipok_key', '' );
+    }
+
+    /**
+     * Entry point — เลือก verify แบบอัตโนมัติ หรือ manual
+     *
+     * @param string   $tmp_file  path ของไฟล์สลิปที่ upload
+     * @param float    $amount    ยอดที่คาดว่าต้องตรง
+     * @param int|null $order_id  WooCommerce order ID
+     * @return array{ success: bool, message: string }
+     */
+    public function verify( string $tmp_file, float $amount, ?int $order_id = null ): array {
+        if ( $this->api_key ) {
+            return $this->verify_via_slipok( $tmp_file, $amount );
+        }
+
+        return $this->save_for_manual_review( $tmp_file, $order_id );
+    }
+
+    /**
+     * ตรวจสอบสลิปผ่าน SlipOK API
+     */
+    private function verify_via_slipok( string $tmp_file, float $expected_amount ): array {
+        $response = wp_remote_post( self::SLIPOK_API . $this->api_key, [
+            'timeout' => 30,
+            'body'    => [
+                'files' => new CURLFile( $tmp_file ),
+                'log'   => true,
+            ],
+        ]);
+
+        if ( is_wp_error( $response ) ) {
+            return $this->fail( 'เชื่อมต่อ SlipOK API ไม่ได้: ' . $response->get_error_message() );
+        }
+
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( empty( $body['success'] ) ) {
+            $reason = $body['message'] ?? 'อ่านสลิปไม่ได้';
+            return $this->fail( 'สลิปไม่ถูกต้อง: ' . $reason );
+        }
+
+        $slip_amount = floatval( $body['data']['amount'] ?? 0 );
+
+        if ( $expected_amount > 0 && $slip_amount !== $expected_amount ) {
+            return $this->fail(
+                sprintf( 'ยอดเงินในสลิป (%.2f) ไม่ตรงกับยอดสั่งซื้อ (%.2f)', $slip_amount, $expected_amount )
+            );
+        }
+
+        return $this->ok( 'ชำระเงินสำเร็จ! ขอบคุณครับ', $body['data'] );
+    }
+
+    /**
+     * บันทึกสลิปและเปลี่ยน Order เป็น on-hold รอ Admin
+     */
+    private function save_for_manual_review( string $tmp_file, ?int $order_id ): array {
+        $filename = 'slip-' . ( $order_id ?? 'noid' ) . '-' . time() . '.jpg';
+        $upload   = wp_upload_bits( $filename, null, file_get_contents( $tmp_file ) );
+
+        if ( ! empty( $upload['error'] ) ) {
+            return $this->fail( 'บันทึกไฟล์ไม่ได้: ' . $upload['error'] );
+        }
+
+        if ( $order_id ) {
+            $order = wc_get_order( $order_id );
+            if ( $order ) {
+                $order->update_status( 'on-hold', 'รอ Admin ตรวจสอบสลิป' );
+                $order->add_order_note( 'URL สลิป: ' . $upload['url'] );
+                update_post_meta( $order_id, '_promptpay_slip_url', $upload['url'] );
+            }
+        }
+
+        return $this->ok( 'ส่งสลิปเรียบร้อย รอเจ้าหน้าที่ตรวจสอบภายใน 24 ชั่วโมง' );
+    }
+
+    // ---- Helpers ----
+
+    private function ok( string $message, array $data = [] ): array {
+        return [ 'success' => true, 'message' => $message, 'data' => $data ];
+    }
+
+    private function fail( string $message ): array {
+        return [ 'success' => false, 'message' => $message ];
+    }
+}
