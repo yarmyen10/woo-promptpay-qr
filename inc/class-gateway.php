@@ -15,7 +15,7 @@ class PromptPay_Gateway extends WC_Payment_Gateway {
         $this->method_title       = 'PromptPay QR';
         $this->method_description = 'ชำระเงินผ่าน PromptPay QR Code พร้อมแนบสลิปยืนยัน';
 
-        add_filter( 'woocommerce_gateway_icon', [ $this, 'custom_icon' ], 10, 2 );
+        // add_filter( 'woocommerce_gateway_icon', [ $this, 'custom_icon' ], 10, 2 );
 
         // โหลด settings
         $this->init_form_fields();
@@ -36,6 +36,17 @@ class PromptPay_Gateway extends WC_Payment_Gateway {
             'woocommerce_update_options_payment_gateways_' . $this->id,
             [ $this, 'process_admin_options' ]
         );
+    }
+
+    public function get_title(): string {
+        $icon = '<img src="https://upload.wikimedia.org/wikipedia/commons/c/c5/PromptPay-logo.png"
+                    style="width:50px; height:auto; vertical-align:middle; margin-right:8px;" />';
+
+        return $icon . $this->title;  // ใช้ $this->title แทน hardcode
+    }
+
+    public function get_icon(): string {
+        return '';
     }
 
     public function custom_icon( string $icon, string $gateway_id ): string {
