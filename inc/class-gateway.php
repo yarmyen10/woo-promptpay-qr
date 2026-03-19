@@ -10,7 +10,7 @@ class PromptPay_Gateway extends WC_Payment_Gateway {
 
     public function __construct() {
         $this->id                 = 'promptpay_qr';
-        $this->icon               = ''; // ใส่ URL รูปโลโก้ได้
+        $this->icon               = 'https://upload.wikimedia.org/wikipedia/commons/c/c5/PromptPay-logo.png'; // ใส่ URL รูปโลโก้ได้
         $this->has_fields         = true; // แสดง custom form ใน checkout
         $this->method_title       = 'PromptPay QR';
         $this->method_description = 'ชำระเงินผ่าน PromptPay QR Code พร้อมแนบสลิปยืนยัน';
