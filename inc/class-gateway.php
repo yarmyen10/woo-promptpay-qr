@@ -89,7 +89,7 @@ class PromptPay_Gateway extends WC_Payment_Gateway {
         $nonce    = wp_create_nonce( 'promptpay_upload_slip' );
         $ajax_url = admin_url( 'admin-ajax.php' );
 
-        include PROMPTPAY_DIR . 'inc/templates/payment-form.php';
+        // include PROMPTPAY_DIR . 'inc/templates/payment-form.php';
     }
 
     /**
