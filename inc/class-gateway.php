@@ -39,7 +39,7 @@ class PromptPay_Gateway extends WC_Payment_Gateway {
     }
 
     public function get_title(): string {
-        $icon = '<img src="https://upload.wikimedia.org/wikipedia/commons/c/c5/PromptPay-logo.png"
+        $icon = '<img src="../assets/imgs/prompt-pay-logo.jpg"
                     style="width:25%; height:auto; vertical-align:middle; margin-right:8px;" />';
 
         return $icon . $this->title;  // ใช้ $this->title แทน hardcode
@@ -49,15 +49,15 @@ class PromptPay_Gateway extends WC_Payment_Gateway {
         return '';
     }
 
-    public function custom_icon( string $icon, string $gateway_id ): string {
-        if ( $gateway_id !== $this->id ) return $icon;
+    // public function custom_icon( string $icon, string $gateway_id ): string {
+    //     if ( $gateway_id !== $this->id ) return $icon;
 
-        return '<img src="https://upload.wikimedia.org/wikipedia/commons/c/c5/PromptPay-logo.png"
-                    alt="PromptPay"
-                    width="80"
-                    height="auto"
-                    style="vertical-align:middle;" />';
-    }
+    //     return '<img src="https://upload.wikimedia.org/wikipedia/commons/c/c5/PromptPay-logo.png"
+    //                 alt="PromptPay"
+    //                 width="80"
+    //                 height="auto"
+    //                 style="vertical-align:middle;" />';
+    // }
 
     /**
      * ฟิลด์ตั้งค่าใน WooCommerce → Settings → Payments → PromptPay QR
