@@ -39,7 +39,7 @@ class PromptPay_Gateway extends WC_Payment_Gateway {
     }
 
     public function get_title(): string {
-        $icon = '<img src="' . plugin_dir_url( __FILE__ ) . 'assets/imgs/prompt-pay-logo.jpg"
+        $icon = '<img src="' . plugin_dir_url(dirname( __FILE__ )) . 'assets/imgs/prompt-pay-logo.jpg"
             style="width:25%; height:auto; vertical-align:middle; margin-right:8px;" />';
 
         return $icon . $this->title;  // ใช้ $this->title แทน hardcode
