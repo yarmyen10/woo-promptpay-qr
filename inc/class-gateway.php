@@ -28,8 +28,8 @@ class PromptPay_Gateway extends WC_Payment_Gateway {
         $this->slipok_key  = $this->get_option( 'slipok_key' );
 
         // Sync ค่ากับ wp_options ที่ Settings Page ใช้ร่วมกัน
-        // update_option( 'promptpay_phone',      $this->phone );
-        // update_option( 'promptpay_slipok_key', $this->slipok_key );
+        update_option( 'promptpay_phone',      $this->phone );
+        update_option( 'promptpay_slipok_key', $this->slipok_key );
 
         // Hook บันทึก settings จาก WooCommerce Admin
         add_action(
