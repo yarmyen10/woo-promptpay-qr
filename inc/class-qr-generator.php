@@ -33,6 +33,6 @@ class PromptPay_QR_Generator {
      */
     private static function normalize_phone( string $phone ): string {
         $phone = preg_replace( '/\D/', '', $phone ); // เอาแต่ตัวเลข
-        return '66' . ltrim( $phone, '0' );
+        return $phone; //'66' . ltrim( $phone, '0' );
     }
 }
