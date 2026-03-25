@@ -10,32 +10,38 @@ class PromptPay_Gateway extends WC_Payment_Gateway {
 
     public function __construct() {
         $this->id                 = 'promptpay_qr';
-        $this->icon               = ''; // ใส่ URL รูปโลโก้ได้
-        $this->has_fields         = true; // แสดง custom form ใน checkout
+        $this->icon               = '';
+        $this->has_fields         = true;
         $this->method_title       = 'PromptPay QR';
         $this->method_description = 'ชำระเงินผ่าน PromptPay QR Code พร้อมแนบสลิปยืนยัน';
 
-        // add_filter( 'woocommerce_gateway_icon', [ $this, 'custom_icon' ], 10, 2 );
-
-        // โหลด settings
         $this->init_form_fields();
         $this->init_settings();
 
-        // Map settings → properties
         $this->title       = $this->get_option( 'title' );
         $this->description = $this->get_option( 'description' );
         $this->phone       = $this->get_option( 'phone' );
         $this->slipok_key  = $this->get_option( 'slipok_key' );
 
-        // Sync ค่ากับ wp_options ที่ Settings Page ใช้ร่วมกัน
-        update_option( 'promptpay_phone',      $this->phone );
-        update_option( 'promptpay_slipok_key', $this->slipok_key );
-
-        // Hook บันทึก settings จาก WooCommerce Admin
+        // Hook บันทึกจาก WooCommerce Admin
         add_action(
             'woocommerce_update_options_payment_gateways_' . $this->id,
             [ $this, 'process_admin_options' ]
         );
+
+        // Hook หลัง WooCommerce Save → Sync ไป Custom Option
+        add_action(
+            'woocommerce_update_options_payment_gateways_' . $this->id,
+            [ $this, 'sync_to_custom_options' ]
+        );
+    }
+
+    /**
+     * Sync ค่าจาก WooCommerce → Custom Options
+     */
+    public function sync_to_custom_options(): void {
+        update_option( 'promptpay_phone',      $this->get_option('phone') );
+        update_option( 'promptpay_slipok_key', $this->get_option('slipok_key') );
     }
 
     public function get_title(): string {
