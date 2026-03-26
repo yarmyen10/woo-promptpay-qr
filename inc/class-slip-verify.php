@@ -69,23 +69,35 @@ class PromptPay_Slip_Verify {
      * บันทึกสลิปและเปลี่ยน Order เป็น on-hold รอ Admin
      */
     private function save_for_manual_review( string $tmp_file, ?int $order_id ): array {
+
+        // กำหนด custom path
+        $upload_dir = wp_upload_dir();
+        $custom_dir = $upload_dir['basedir'] . '/slips/' . date('Y/m');
+        
+        // สร้างโฟลเดอร์ถ้ายังไม่มี
+        wp_mkdir_p( $custom_dir );
+
+        // ป้องกันเข้าถึงตรงๆ ผ่าน URL
+        file_put_contents( $custom_dir . '/.htaccess', 'deny from all' );
+
         $filename = 'slip-' . ( $order_id ?? 'noid' ) . '-' . time() . '.jpg';
-        $upload   = wp_upload_bits( $filename, null, file_get_contents( $tmp_file ) );
+        $filepath = $custom_dir . '/' . $filename;
 
-        if ( ! empty( $upload['error'] ) ) {
-            return $this->fail( 'บันทึกไฟล์ไม่ได้: ' . $upload['error'] );
-        }
+        // copy ไฟล์ไปไว้ที่ path ใหม่
+        move_uploaded_file( $tmp_file, $filepath );
 
+        // เก็บแค่ relative path ใน DB
+        $relative = 'slips/' . date('Y/m') . '/' . $filename;
+        
         if ( $order_id ) {
             $order = wc_get_order( $order_id );
             if ( $order ) {
                 $order->update_status( 'on-hold', 'รอ Admin ตรวจสอบสลิป' );
-                $order->add_order_note( 'URL สลิป: ' . $upload['url'] );
-                update_post_meta( $order_id, '_promptpay_slip_url', $upload['url'] );
+                update_post_meta( $order_id, '_promptpay_slip_path', $relative );
             }
         }
 
-        return $this->ok( 'ส่งสลิปเรียบร้อย รอเจ้าหน้าที่ตรวจสอบภายใน 24 ชั่วโมง' );
+        return $this->ok( 'ส่งสลิปเรียบร้อย รอเจ้าหน้าที่ตรวจสอบ' );
     }
 
     // ---- Helpers ----
