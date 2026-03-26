@@ -23,12 +23,12 @@ class PromptPay_Slip_Verify {
      * @param int|null $order_id  WooCommerce order ID
      * @return array{ success: bool, message: string }
      */
-    public function verify( string $tmp_file, float $amount, ?int $order_id = null ): array {
+    public function verify( string $tmp_file, float $amount, ?int $order_id = null, int $bill = 1 ): array {
         if ( $this->api_key ) {
             return $this->verify_via_slipok( $tmp_file, $amount );
         }
 
-        return $this->save_for_manual_review( $tmp_file, $order_id );
+        return $this->save_for_manual_review( $tmp_file, $order_id, $bill );
     }
 
     /**
@@ -68,11 +68,12 @@ class PromptPay_Slip_Verify {
     /**
      * บันทึกสลิปและเปลี่ยน Order เป็น on-hold รอ Admin
      */
-    private function save_for_manual_review( string $tmp_file, ?int $order_id ): array {
+    private function save_for_manual_review( string $tmp_file, ?int $order_id, int $bill = 1 ): array {
 
         // กำหนด custom path
         $upload_dir = wp_upload_dir();
-        $custom_dir = $upload_dir['basedir'] . '/slips/' . date('Y/m');
+        $relative_prefixes = 'slips/' . date('Y/m');
+        $custom_dir = $upload_dir['basedir'] . '/' . $relative_prefixes;
         
         // สร้างโฟลเดอร์ถ้ายังไม่มี
         wp_mkdir_p( $custom_dir );
@@ -80,20 +81,20 @@ class PromptPay_Slip_Verify {
         // ป้องกันเข้าถึงตรงๆ ผ่าน URL
         file_put_contents( $custom_dir . '/.htaccess', 'deny from all' );
 
-        $filename = 'slip-' . ( $order_id ?? 'noid' ) . '-' . time() . '.jpg';
+        $filename = 'slip-' . ( $order_id ?? 'noid' ) . '-bill' . $bill . '-' . time() . '.jpg';
         $filepath = $custom_dir . '/' . $filename;
 
         // copy ไฟล์ไปไว้ที่ path ใหม่
         move_uploaded_file( $tmp_file, $filepath );
 
         // เก็บแค่ relative path ใน DB
-        $relative = 'slips/' . date('Y/m') . '/' . $filename;
+        $relative = $relative_prefixes . '/' . $filename;
         
         if ( $order_id ) {
             $order = wc_get_order( $order_id );
             if ( $order ) {
                 $order->update_status( 'on-hold', 'รอ Admin ตรวจสอบสลิป' );
-                update_post_meta( $order_id, '_promptpay_slip_path', $relative );
+                update_post_meta( $order_id, '_promptpay_slip_bill' . $bill, $relative );
             }
         }
 
