@@ -23,6 +23,7 @@ spl_autoload_register( function( $class ) {
         'PromptPay_Settings'      => 'inc/class-settings.php',
         'PromptPay_Assets'        => 'inc/class-assets.php',
         'PromptPay_Gateway'       => 'inc/class-gateway.php',
+        'PromptPay_REST_API'      => 'inc/class-rest-api.php',
     ];
     if ( isset( $map[ $class ] ) ) {
         require_once PROMPTPAY_DIR . $map[ $class ];
@@ -50,6 +51,7 @@ final class PromptPay_Plugin {
         PromptPay_Assets::register();
         PromptPay_Shortcode::register();
         PromptPay_Ajax::register();
+        PromptPay_REST_API::register();
         self::register_gateway();
     }
 
