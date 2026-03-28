@@ -83,7 +83,7 @@ class PromptPay_Ajax {
         $custom_dir = $upload_dir['basedir'] . '/slips/' . date('Y/m');
         wp_mkdir_p( $custom_dir );
 
-        $filename = 'slip-order-' . $order_id . '-bill' . $bill . '-' . time() . '.jpg';
+        $filename = 'slip-' . $order_id . '-bill' . $bill . '-' . time() . '.jpg';
         $filepath = $custom_dir . '/' . $filename;
         move_uploaded_file( $tmp_file, $filepath );
 
