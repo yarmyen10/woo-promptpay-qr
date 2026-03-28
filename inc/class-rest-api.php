@@ -157,6 +157,12 @@ class PromptPay_REST_API {
         $upload_dir = wp_upload_dir();
         $filepath   = $upload_dir['basedir'] . '/' . $relative;
 
+        do_action('qm/info', '$order_id: ' . $order_id);
+        do_action('qm/info', '$bill: ' . $bill);
+        do_action('qm/info', '$relative: ' . $relative);
+        do_action('qm/info', '$upload_dir: ' . $upload_dir);
+        do_action('qm/info', '$filepath: ' . $filepath);
+
         if ( ! $relative || ! file_exists( $filepath ) ) {
             wp_send_json_error([ 'message' => 'ไม่พบไฟล์' ], 404);
         }
