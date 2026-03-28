@@ -8,6 +8,9 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  */
 class PromptPay_Gateway extends WC_Payment_Gateway {
 
+    public string $phone      = '';
+    public string $slipok_key = '';
+
     public function __construct() {
         $this->id                 = 'promptpay_qr';
         $this->icon               = '';
