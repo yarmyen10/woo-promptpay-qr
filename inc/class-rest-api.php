@@ -237,11 +237,30 @@ class PromptPay_REST_API {
 
     /** Admin หรือเจ้าของ Order เท่านั้น */
     public static function can_view_slip( WP_REST_Request $req ): bool {
-        if ( current_user_can('manage_options') ) return true;
 
-        $order = wc_get_order( $req->get_param('order_id') );
-        if ( ! $order ) return false;
+        // แบบที่ 1 — Nonce (เรียกจาก theme/WordPress page)
+        $nonce = $req->get_header('X-WP-Nonce');
+        if ( $nonce && wp_verify_nonce( $nonce, 'wp_rest' ) ) {
+            $order = wc_get_order( $req->get_param('order_id') );
+            if ( ! $order ) return false;
 
-        return (int) $order->get_customer_id() === get_current_user_id();
+            // Admin หรือเจ้าของ order
+            if ( current_user_can('manage_options') ) return true;
+            return (int) $order->get_customer_id() === get_current_user_id();
+        }
+
+        // แบบที่ 2 — Application Password (เรียกจาก TailAdmin)
+        $auth = $req->get_header('Authorization');
+        if ( $auth && str_starts_with( $auth, 'Basic ' ) ) {
+            $credentials = base64_decode( substr( $auth, 6 ) );
+            [ $username, $password ] = explode( ':', $credentials, 2 );
+
+            $user = wp_authenticate_application_password( null, $username, $password );
+            if ( is_wp_error( $user ) ) return false;
+
+            return user_can( $user, 'manage_options' );
+        }
+
+        return false;
     }
 }
