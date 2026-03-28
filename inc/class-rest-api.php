@@ -62,6 +62,18 @@ class PromptPay_REST_API {
             'callback'            => [ self::class, 'serve_slip' ],
             'permission_callback' => [ self::class, 'can_view_slip' ],
         ]);
+
+
+        register_rest_route( self::NAMESPACE, '/me', [
+            'methods'             => 'GET',
+            'callback'            => function() {
+                return rest_ensure_response([
+                    'user_id' => get_current_user_id(),
+                    'is_admin' => current_user_can('manage_options'),
+                ]);
+            },
+            'permission_callback' => '__return_true',
+        ]);
     }
 
     // =========================================================
