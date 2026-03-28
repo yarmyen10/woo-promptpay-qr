@@ -164,7 +164,12 @@ class PromptPay_REST_API {
         // do_action('qm/info', '$filepath: ' . $filepath);
 
         if ( ! $relative || ! file_exists( $filepath ) ) {
-            wp_send_json_error([ 'message' => 'ไม่พบไฟล์',  'filepath' => $filepath ], 404);
+            wp_send_json_error([ 
+                'message'  => 'ไม่พบไฟล์',
+                'basedir'  => $upload_dir['basedir'],
+                'relative' => $relative,
+                'filepath' => $filepath,
+            ], 404);
         }
 
         header( 'Content-Type: '   . mime_content_type( $filepath ) );
