@@ -48,7 +48,7 @@ class PromptPay_Ajax {
 
         self::set_status(
             $order_id,
-            'waiting-verification-' . $bill,
+            'wait-verify-' . $bill,
             sprintf( 'รอเจ้าหน้าที่ตรวจสอบสลิปบิลที่ %d (%s)', $bill, $result['message'] )
         );
 
