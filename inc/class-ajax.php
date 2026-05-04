@@ -23,22 +23,37 @@ class PromptPay_Ajax {
             wp_send_json_error([ 'message' => 'ไม่พบไฟล์สลิป' ]);
         }
 
-        $slip_tmp  = sanitize_text_field( $_FILES['slip']['tmp_name'] );
-        $order_id  = intval( $_POST['order_id'] ?? 0 );
-        $amount    = self::get_order_amount( $order_id );
+        $slip_tmp = sanitize_text_field( $_FILES['slip']['tmp_name'] );
+        $order_id = intval( $_POST['order_id'] ?? 0 );
+        $bill     = intval( $_POST['bill'] ?? 1 );
+        $amount   = self::get_order_amount( $order_id );
 
-        // Verify
         $verifier = new PromptPay_Slip_Verify();
-        $bill = intval( $_POST['bill'] ?? 1 );
-        $result = $verifier->verify( $slip_tmp, $amount, $order_id, $bill );
+        $result   = $verifier->verify( $slip_tmp, $amount, $order_id, $bill );
+
+        // Save the slip in every case so admins can review it later.
+        self::save_slip( $slip_tmp, $order_id, $bill );
 
         if ( $result['success'] ) {
-            self::save_slip( $slip_tmp, $order_id, $bill );
-            self::complete_order( $order_id );
+            self::set_status(
+                $order_id,
+                'paid-' . $bill,
+                sprintf( 'ตรวจสอบสลิปบิลที่ %d ผ่าน', $bill )
+            );
             wp_send_json_success([
                 'message'  => $result['message'],
                 'redirect' => self::get_thankyou_url( $order_id ),
             ]);
+        }
+
+        self::set_status(
+            $order_id,
+            'waiting-verification-' . $bill,
+            sprintf( 'รอเจ้าหน้าที่ตรวจสอบสลิปบิลที่ %d (%s)', $bill, $result['message'] )
+        );
+
+        if ( ! empty( $result['manual'] ) ) {
+            wp_send_json_success([ 'message' => $result['message'] ]);
         }
 
         wp_send_json_error([ 'message' => $result['message'] ]);
@@ -56,16 +71,15 @@ class PromptPay_Ajax {
     }
 
     /**
-     * Mark order เป็น Processing
+     * อัปเดต status ของ order — ใช้ slug แบบไม่มี wc- prefix (Woo จะเติมให้เอง)
      */
-    private static function complete_order( int $order_id ): void {
+    private static function set_status( int $order_id, string $status, string $note ): void {
         if ( ! $order_id || ! function_exists( 'wc_get_order' ) ) return;
 
         $order = wc_get_order( $order_id );
         if ( ! $order ) return;
 
-        $order->payment_complete();
-        $order->update_status( 'processing', 'ชำระเงินผ่าน PromptPay สำเร็จ' );
+        $order->update_status( $status, $note );
     }
 
     /**

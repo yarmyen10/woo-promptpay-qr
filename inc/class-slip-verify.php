@@ -28,7 +28,11 @@ class PromptPay_Slip_Verify {
             return $this->verify_via_slipok( $tmp_file, $amount );
         }
 
-        return $this->save_for_manual_review( $tmp_file, $order_id, $bill );
+        return [
+            'success' => false,
+            'manual'  => true,
+            'message' => 'รอเจ้าหน้าที่ตรวจสอบสลิป',
+        ];
     }
 
     /**
