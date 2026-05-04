@@ -41,6 +41,7 @@ class PromptPay_Ajax {
                 sprintf( 'ตรวจสอบสลิปบิลที่ %d ผ่าน', $bill )
             );
             wp_send_json_success([
+                'verify'   => true,
                 'message'  => $result['message'],
                 'redirect' => self::get_thankyou_url( $order_id ),
             ]);
@@ -53,10 +54,16 @@ class PromptPay_Ajax {
         );
 
         if ( ! empty( $result['manual'] ) ) {
-            wp_send_json_success([ 'message' => $result['message'] ]);
+            wp_send_json_success([
+                'verify'  => false,
+                'message' => $result['message'],
+            ]);
         }
 
-        wp_send_json_error([ 'message' => $result['message'] ]);
+        wp_send_json_error([
+            'verify'  => false,
+            'message' => $result['message'],
+        ]);
     }
 
     /**
