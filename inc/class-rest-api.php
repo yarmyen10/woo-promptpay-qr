@@ -133,10 +133,10 @@ class PromptPay_REST_API {
         $amount   = self::get_order_amount( $order_id );
 
         $verifier = new PromptPay_Slip_Verify();
-        $result   = $verifier->verify( $slip_tmp, $amount, $order_id ?: null, $bill );
+        $result   = $verifier->verify( $slip_tmp, $amount );
 
         if ( $result['success'] ) {
-            self::save_slip( $files['slip']['tmp_name'], $order_id, $bill );
+            PromptPay_Slip_Verify::save_slip_file( $slip_tmp, $order_id, $bill );
             self::complete_order( $order_id, $bill );
             return rest_ensure_response([
                 'success'  => true,
@@ -148,28 +148,17 @@ class PromptPay_REST_API {
         return new WP_REST_Response([ 'success' => false, 'message' => $result['message'] ], 422);
     }
 
-    /** GET /slip/{order_id}/{bill} */
-    public static function serve_slip( WP_REST_Request $req ): void {
-        $order_id = $req->get_param('order_id');
-        $bill     = $req->get_param('bill');
-        $relative = get_post_meta( $order_id, '_promptpay_slip_bill' . $bill, true );
+    /** GET /slip/{order_id}/{bill} — streams ไฟล์โดยตรง (ไม่ใช่ JSON response) */
+    public static function serve_slip( WP_REST_Request $req ) {
+        $order_id = (int) $req->get_param('order_id');
+        $bill     = (int) $req->get_param('bill');
+        $relative = PromptPay_Slip_Verify::get_slip_path( $order_id, $bill );
 
         $upload_dir = wp_upload_dir();
         $filepath   = $upload_dir['basedir'] . '/' . $relative;
 
-        // do_action('qm/info', '$order_id: ' . $order_id);
-        // do_action('qm/info', '$bill: ' . $bill);
-        // do_action('qm/info', '$relative: ' . $relative);
-        // do_action('qm/info', '$upload_dir: ' . $upload_dir);
-        // do_action('qm/info', '$filepath: ' . $filepath);
-
         if ( ! $relative || ! file_exists( $filepath ) ) {
-            wp_send_json_error([ 
-                'message'  => 'ไม่พบไฟล์',
-                'basedir'  => $upload_dir['basedir'],
-                'relative' => $relative,
-                'filepath' => $filepath,
-            ], 404);
+            return new WP_Error( 'slip_not_found', 'ไม่พบไฟล์สลิป', [ 'status' => 404 ] );
         }
 
         header( 'Content-Type: '   . mime_content_type( $filepath ) );
@@ -181,26 +170,6 @@ class PromptPay_REST_API {
     // =========================================================
     // Helpers
     // =========================================================
-
-    /** บันทึกไฟล์สลิปลง disk */
-    private static function save_slip( string $tmp_file, int $order_id, int $bill ): void {
-        $upload_dir = wp_upload_dir();
-        $custom_dir = $upload_dir['basedir'] . '/slips/' . date('Y/m');
-        wp_mkdir_p( $custom_dir );
-
-        // ป้องกันเข้าถึงตรงๆ ผ่าน URL
-        $htaccess = $custom_dir . '/.htaccess';
-        if ( ! file_exists( $htaccess ) ) {
-            file_put_contents( $htaccess, 'deny from all' );
-        }
-
-        $filename = 'slip-' . $order_id . '-bill' . $bill . '-' . time() . '.jpg';
-        $filepath = $custom_dir . '/' . $filename;
-        move_uploaded_file( $tmp_file, $filepath );
-
-        $relative = 'slips/' . date('Y/m') . '/' . $filename;
-        update_post_meta( $order_id, '_promptpay_slip_bill' . $bill, $relative );
-    }
 
     /** Mark order complete ตาม bill */
     private static function complete_order( int $order_id, int $bill = 1 ): void {

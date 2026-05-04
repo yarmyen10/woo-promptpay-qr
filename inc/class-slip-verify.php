@@ -8,6 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class PromptPay_Slip_Verify {
 
     private const SLIPOK_API = 'https://api.slipok.com/api/line/apikey/';
+    public  const META_KEY   = '_promptpay_slip_bill';
 
     private string $api_key;
 
@@ -16,14 +17,11 @@ class PromptPay_Slip_Verify {
     }
 
     /**
-     * Entry point — เลือก verify แบบอัตโนมัติ หรือ manual
+     * Entry point — verify อัตโนมัติผ่าน SlipOK ถ้ามี API key, ไม่งั้น return manual flag
      *
-     * @param string   $tmp_file  path ของไฟล์สลิปที่ upload
-     * @param float    $amount    ยอดที่คาดว่าต้องตรง
-     * @param int|null $order_id  WooCommerce order ID
-     * @return array{ success: bool, message: string }
+     * @return array{ success: bool, message: string, manual?: bool, data?: array }
      */
-    public function verify( string $tmp_file, float $amount, ?int $order_id = null, int $bill = 1 ): array {
+    public function verify( string $tmp_file, float $amount ): array {
         if ( $this->api_key ) {
             return $this->verify_via_slipok( $tmp_file, $amount );
         }
@@ -33,6 +31,45 @@ class PromptPay_Slip_Verify {
             'manual'  => true,
             'message' => 'รอเจ้าหน้าที่ตรวจสอบสลิป',
         ];
+    }
+
+    /**
+     * บันทึกไฟล์สลิปลง disk + เก็บ relative path ใน order meta (HPOS-compatible)
+     * Returns false ถ้า move_uploaded_file ล้มเหลว หรือหา order ไม่เจอ
+     */
+    public static function save_slip_file( string $tmp_file, int $order_id, int $bill ): bool {
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) return false;
+
+        $upload_dir   = wp_upload_dir();
+        $relative_dir = 'slips/' . date( 'Y/m' );
+        $custom_dir   = $upload_dir['basedir'] . '/' . $relative_dir;
+        wp_mkdir_p( $custom_dir );
+
+        // ป้องกันเข้าถึงตรงๆ ผ่าน URL
+        $htaccess = $custom_dir . '/.htaccess';
+        if ( ! file_exists( $htaccess ) ) {
+            file_put_contents( $htaccess, 'deny from all' );
+        }
+
+        $filename = 'slip-' . $order_id . '-bill' . $bill . '-' . time() . '.jpg';
+        $filepath = $custom_dir . '/' . $filename;
+
+        if ( ! move_uploaded_file( $tmp_file, $filepath ) ) return false;
+
+        $relative = $relative_dir . '/' . $filename;
+        $order->update_meta_data( self::META_KEY . $bill, $relative );
+        $order->save();
+
+        return true;
+    }
+
+    /**
+     * อ่าน relative path ของสลิปจาก order meta
+     */
+    public static function get_slip_path( int $order_id, int $bill ): string {
+        $order = wc_get_order( $order_id );
+        return $order ? (string) $order->get_meta( self::META_KEY . $bill, true ) : '';
     }
 
     /**
@@ -67,42 +104,6 @@ class PromptPay_Slip_Verify {
         }
 
         return $this->ok( 'ชำระเงินสำเร็จ! ขอบคุณครับ', $body['data'] );
-    }
-
-    /**
-     * บันทึกสลิปและเปลี่ยน Order เป็น on-hold รอ Admin
-     */
-    private function save_for_manual_review( string $tmp_file, ?int $order_id, int $bill = 1 ): array {
-
-        // กำหนด custom path
-        $upload_dir = wp_upload_dir();
-        $relative_prefixes = 'slips/' . date('Y/m');
-        $custom_dir = $upload_dir['basedir'] . '/' . $relative_prefixes;
-        
-        // สร้างโฟลเดอร์ถ้ายังไม่มี
-        wp_mkdir_p( $custom_dir );
-
-        // ป้องกันเข้าถึงตรงๆ ผ่าน URL
-        file_put_contents( $custom_dir . '/.htaccess', 'deny from all' );
-
-        $filename = 'slip-' . ( $order_id ?? 'noid' ) . '-bill' . $bill . '-' . time() . '.jpg';
-        $filepath = $custom_dir . '/' . $filename;
-
-        // copy ไฟล์ไปไว้ที่ path ใหม่
-        move_uploaded_file( $tmp_file, $filepath );
-
-        // เก็บแค่ relative path ใน DB
-        $relative = $relative_prefixes . '/' . $filename;
-        
-        if ( $order_id ) {
-            $order = wc_get_order( $order_id );
-            if ( $order ) {
-                $order->update_status( 'on-hold', 'รอ Admin ตรวจสอบสลิป' );
-                update_post_meta( $order_id, '_promptpay_slip_bill' . $bill, $relative );
-            }
-        }
-
-        return $this->ok( 'ส่งสลิปเรียบร้อย รอเจ้าหน้าที่ตรวจสอบ' );
     }
 
     // ---- Helpers ----

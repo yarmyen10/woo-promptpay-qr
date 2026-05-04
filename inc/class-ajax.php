@@ -23,16 +23,16 @@ class PromptPay_Ajax {
             wp_send_json_error([ 'message' => 'ไม่พบไฟล์สลิป' ]);
         }
 
-        $slip_tmp = sanitize_text_field( $_FILES['slip']['tmp_name'] );
+        $slip_tmp = $_FILES['slip']['tmp_name'];
         $order_id = intval( $_POST['order_id'] ?? 0 );
         $bill     = intval( $_POST['bill'] ?? 1 );
         $amount   = self::get_order_amount( $order_id );
 
         $verifier = new PromptPay_Slip_Verify();
-        $result   = $verifier->verify( $slip_tmp, $amount, $order_id, $bill );
+        $result   = $verifier->verify( $slip_tmp, $amount );
 
         // Save the slip in every case so admins can review it later.
-        self::save_slip( $slip_tmp, $order_id, $bill );
+        PromptPay_Slip_Verify::save_slip_file( $slip_tmp, $order_id, $bill );
 
         if ( $result['success'] ) {
             self::set_status(
@@ -92,16 +92,4 @@ class PromptPay_Ajax {
         return home_url();
     }
 
-    private static function save_slip( string $tmp_file, int $order_id, int $bill ): void {
-        $upload_dir = wp_upload_dir();
-        $custom_dir = $upload_dir['basedir'] . '/slips/' . date('Y/m');
-        wp_mkdir_p( $custom_dir );
-
-        $filename = 'slip-' . $order_id . '-bill' . $bill . '-' . time() . '.jpg';
-        $filepath = $custom_dir . '/' . $filename;
-        move_uploaded_file( $tmp_file, $filepath );
-
-        $relative = 'slips/' . date('Y/m') . '/' . $filename;
-        update_post_meta( $order_id, '_promptpay_slip_bill' . $bill, $relative );
-    }
 }

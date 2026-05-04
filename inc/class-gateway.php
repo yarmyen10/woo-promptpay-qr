@@ -145,7 +145,7 @@ class PromptPay_Gateway extends WC_Payment_Gateway {
 
         if ( $slip_tmp ) {
             $verifier = new PromptPay_Slip_Verify();
-            $result   = $verifier->verify( $slip_tmp, (float) $order->get_total(), $order_id );
+            $result   = $verifier->verify( $slip_tmp, (float) $order->get_total() );
 
             if ( $result['success'] ) {
                 $order->payment_complete();
