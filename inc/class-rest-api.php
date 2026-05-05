@@ -215,6 +215,26 @@ class PromptPay_REST_API {
         return current_user_can('manage_options');
     }
 
+    /** อ่าน Authorization header แบบ fallback (Apache บางตัว/php-fpm/proxy รบกวน $_SERVER) */
+    private static function read_auth_header( WP_REST_Request $req ): string {
+        $auth = (string) $req->get_header('Authorization');
+        if ( $auth !== '' ) return $auth;
+
+        if ( ! empty( $_SERVER['HTTP_AUTHORIZATION'] ) ) {
+            return (string) $_SERVER['HTTP_AUTHORIZATION'];
+        }
+        if ( ! empty( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ) ) {
+            return (string) $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+        }
+        if ( function_exists('apache_request_headers') ) {
+            $headers = apache_request_headers();
+            if ( is_array( $headers ) ) {
+                return (string) ( $headers['Authorization'] ?? $headers['authorization'] ?? '' );
+            }
+        }
+        return '';
+    }
+
     /** Admin หรือเจ้าของ Order เท่านั้น */
     public static function can_view_slip( WP_REST_Request $req ): bool {
 
@@ -230,7 +250,7 @@ class PromptPay_REST_API {
         }
 
         // แบบที่ 2 — Application Password (เรียกจาก TailAdmin)
-        $auth = $req->get_header('Authorization');
+        $auth = self::read_auth_header( $req );
         if ( $auth && str_starts_with( $auth, 'Basic ' ) ) {
             $credentials = base64_decode( substr( $auth, 6 ) );
             [ $username, $password ] = explode( ':', $credentials, 2 );
@@ -239,6 +259,13 @@ class PromptPay_REST_API {
             if ( is_wp_error( $user ) ) return false;
 
             return user_can( $user, 'manage_options' );
+        }
+
+        // แบบที่ 3 — JWT Bearer (เรียกจาก bigboss SPA)
+        // JWT Auth plugin authenticate ผ่าน determine_current_user filter ไปแล้ว
+        // gating ตรงกับ jaonaichan/v1/orders ที่ใช้ is_user_logged_in() อย่างเดียว
+        if ( $auth && str_starts_with( $auth, 'Bearer ' ) && is_user_logged_in() ) {
+            return true;
         }
 
         return false;
