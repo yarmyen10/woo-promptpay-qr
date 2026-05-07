@@ -132,8 +132,12 @@ class PromptPay_REST_API {
         $bill     = intval( $req->get_param('bill') ?? 1 );
         $amount   = self::get_order_amount( $order_id );
 
+        $mock_param = $req->get_param('mock_result');
+        $mock       = ( defined( 'WP_DEBUG' ) && WP_DEBUG && $mock_param !== null )
+                        ? filter_var( $mock_param, FILTER_VALIDATE_BOOLEAN )
+                        : null;
         $verifier = new PromptPay_Slip_Verify();
-        $result   = $verifier->verify( $slip_tmp, $amount );
+        $result   = $verifier->verify( $slip_tmp, $amount, $mock );
 
         if ( $result['success'] ) {
             PromptPay_Slip_Verify::save_slip_file( $slip_tmp, $order_id, $bill );

@@ -18,10 +18,17 @@ class PromptPay_Slip_Verify {
 
     /**
      * Entry point — verify อัตโนมัติผ่าน SlipOK ถ้ามี API key, ไม่งั้น return manual flag
+     * $mock: WP_DEBUG เท่านั้น — true = สำเร็จ, false = ล้มเหลว, null = ปกติ
      *
      * @return array{ success: bool, message: string, manual?: bool, data?: array }
      */
-    public function verify( string $tmp_file, float $amount ): array {
+    public function verify( string $tmp_file, float $amount, ?bool $mock = null ): array {
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG && $mock !== null ) {
+            return $mock
+                ? $this->ok( '[mock] ชำระเงินสำเร็จ' )
+                : $this->fail( '[mock] สลิปไม่ผ่าน' );
+        }
+
         if ( $this->api_key ) {
             return $this->verify_via_slipok( $tmp_file, $amount );
         }

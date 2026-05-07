@@ -28,8 +28,11 @@ class PromptPay_Ajax {
         $bill     = intval( $_POST['bill'] ?? 1 );
         $amount   = self::get_order_amount( $order_id );
 
+        $mock     = ( defined( 'WP_DEBUG' ) && WP_DEBUG && isset( $_POST['mock_result'] ) )
+                        ? filter_var( $_POST['mock_result'], FILTER_VALIDATE_BOOLEAN )
+                        : null;
         $verifier = new PromptPay_Slip_Verify();
-        $result   = $verifier->verify( $slip_tmp, $amount );
+        $result   = $verifier->verify( $slip_tmp, $amount, $mock );
 
         // Save the slip in every case so admins can review it later.
         PromptPay_Slip_Verify::save_slip_file( $slip_tmp, $order_id, $bill );
