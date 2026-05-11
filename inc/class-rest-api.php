@@ -128,9 +128,10 @@ class PromptPay_REST_API {
         }
 
         $slip_tmp = $files['slip']['tmp_name'];
-        $order_id = intval( $req->get_param('order_id') );
-        $bill     = intval( $req->get_param('bill') ?? 1 );
-        $amount   = self::get_order_amount( $order_id );
+        $order_id      = intval( $req->get_param('order_id') );
+        $bill          = intval( $req->get_param('bill') ?? 1 );
+        $passed_amount = (float) ( $req->get_param('amount') ?? 0 );
+        $amount        = $passed_amount > 0 ? $passed_amount : self::get_order_amount( $order_id );
 
         $mock_param = $req->get_param('mock_result');
         $mock       = ( defined( 'WP_DEBUG' ) && WP_DEBUG && $mock_param !== null )

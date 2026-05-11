@@ -23,10 +23,11 @@ class PromptPay_Ajax {
             wp_send_json_error([ 'message' => 'ไม่พบไฟล์สลิป' ]);
         }
 
-        $slip_tmp = $_FILES['slip']['tmp_name'];
-        $order_id = intval( $_POST['order_id'] ?? 0 );
-        $bill     = intval( $_POST['bill'] ?? 1 );
-        $amount   = self::get_order_amount( $order_id );
+        $slip_tmp     = $_FILES['slip']['tmp_name'];
+        $order_id     = intval( $_POST['order_id'] ?? 0 );
+        $bill         = intval( $_POST['bill'] ?? 1 );
+        $passed_amount = isset( $_POST['amount'] ) ? (float) $_POST['amount'] : 0.0;
+        $amount        = $passed_amount > 0 ? $passed_amount : self::get_order_amount( $order_id );
 
         $mock     = ( defined( 'WP_DEBUG' ) && WP_DEBUG && isset( $_POST['mock_result'] ) )
                         ? filter_var( $_POST['mock_result'], FILTER_VALIDATE_BOOLEAN )
