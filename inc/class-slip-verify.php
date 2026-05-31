@@ -111,13 +111,15 @@ class PromptPay_Slip_Verify {
         $curl_err  = curl_error( $ch );
         curl_close( $ch );
 
+        $req_log = array_diff_key( $fields, [ 'files' => null ] );
+
         if ( $raw_body === false || $curl_err ) {
-            $this->log_slipok( $uri, null, null, $curl_err );
+            $this->log_slipok( $uri, $req_log, null, null, $curl_err );
             return $this->fail( 'เชื่อมต่อ SlipOK API ไม่ได้: ' . $curl_err );
         }
 
         $body = json_decode( $raw_body, true );
-        $this->log_slipok( $uri, $http_code, $body, null );
+        $this->log_slipok( $uri, $req_log, $http_code, $body, null );
 
         if ( empty( $body['success'] ) ) {
             $reason = $body['message'] ?? 'อ่านสลิปไม่ได้';
@@ -139,7 +141,7 @@ class PromptPay_Slip_Verify {
         return [ 'success' => false, 'message' => $message ];
     }
 
-    private function log_slipok( string $uri, ?int $http_code, ?array $body, ?string $curl_error ): void {
+    private function log_slipok( string $uri, array $request, ?int $http_code, ?array $body, ?string $curl_error ): void {
         $upload_dir = wp_upload_dir();
         $log_dir    = trailingslashit( $upload_dir['basedir'] ) . 'slips';
 
@@ -150,9 +152,10 @@ class PromptPay_Slip_Verify {
         $log_file = $log_dir . '/slip-log-' . wp_date( 'Y-m-d' ) . '.log';
 
         $entry = [
-            'time'   => wp_date( 'Y-m-d H:i:s' ),
-            'method' => 'POST',
-            'uri'    => $uri,
+            'time'    => wp_date( 'Y-m-d H:i:s' ),
+            'method'  => 'POST',
+            'uri'     => $uri,
+            'request' => $request,
         ];
 
         if ( $curl_error !== null ) {
