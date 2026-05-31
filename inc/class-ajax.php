@@ -23,11 +23,10 @@ class PromptPay_Ajax {
             wp_send_json_error([ 'message' => 'ไม่พบไฟล์สลิป' ]);
         }
 
-        $slip_tmp     = $_FILES['slip']['tmp_name'];
-        $order_id     = intval( $_POST['order_id'] ?? 0 );
-        $bill         = intval( $_POST['bill'] ?? 1 );
-        $passed_amount = isset( $_POST['amount'] ) ? (float) $_POST['amount'] : 0.0;
-        $amount        = $passed_amount > 0 ? $passed_amount : self::get_order_amount( $order_id );
+        $slip_tmp = $_FILES['slip']['tmp_name'];
+        $order_id = intval( $_POST['order_id'] ?? 0 );
+        $bill     = intval( $_POST['bill'] ?? 1 );
+        $amount   = self::get_bill_amount( $order_id, $bill );
 
         $mock     = ( defined( 'WP_DEBUG' ) && WP_DEBUG && isset( $_POST['mock_result'] ) )
                         ? filter_var( $_POST['mock_result'], FILTER_VALIDATE_BOOLEAN )
@@ -71,14 +70,16 @@ class PromptPay_Ajax {
     }
 
     /**
-     * ดึงยอด Order
+     * ดึงยอดของ bill นั้นๆ จาก order meta _bill{N}_amount
+     * fallback เป็น order total ถ้าไม่มี meta
      */
-    private static function get_order_amount( int $order_id ): float {
-        if ( $order_id && function_exists( 'wc_get_order' ) ) {
-            $order = wc_get_order( $order_id );
-            if ( $order ) return (float) $order->get_total();
-        }
-        return 0.0;
+    private static function get_bill_amount( int $order_id, int $bill ): float {
+        if ( ! $order_id || ! function_exists( 'wc_get_order' ) ) return 0.0;
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) return 0.0;
+        $meta = $order->get_meta( "_bill{$bill}_amount", true );
+        if ( $meta !== '' && $meta !== false ) return (float) $meta;
+        return (float) $order->get_total();
     }
 
     /**

@@ -87,22 +87,27 @@ class PromptPay_Slip_Verify {
      * ตรวจสอบสลิปผ่าน SlipOK API
      */
     private function verify_via_slipok( string $tmp_file, float $expected_amount ): array {
-        $response = wp_remote_post( trailingslashit( $this->endpoint ) . $this->api_key, [
-            'timeout' => 30,
-            'body'    => [
-                'files' => new CURLFile( $tmp_file ),
-                'log'   => true,
-            ],
-        ]);
+        $uri = trailingslashit( $this->endpoint ) . $this->api_key;
 
-        if ( is_wp_error( $response ) ) {
-            $this->log_slipok( null, $response->get_error_message() );
-            return $this->fail( 'เชื่อมต่อ SlipOK API ไม่ได้: ' . $response->get_error_message() );
+        $ch = curl_init( $uri );
+        curl_setopt_array( $ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => [ 'files' => new CURLFile( $tmp_file ), 'log' => 'true' ],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 30,
+        ]);
+        $raw_body  = curl_exec( $ch );
+        $http_code = curl_getinfo( $ch, CURLINFO_HTTP_CODE );
+        $curl_err  = curl_error( $ch );
+        curl_close( $ch );
+
+        if ( $raw_body === false || $curl_err ) {
+            $this->log_slipok( $uri, null, null, $curl_err );
+            return $this->fail( 'เชื่อมต่อ SlipOK API ไม่ได้: ' . $curl_err );
         }
 
-        $raw_body = wp_remote_retrieve_body( $response );
-        $body     = json_decode( $raw_body, true );
-        $this->log_slipok( $response, null );
+        $body = json_decode( $raw_body, true );
+        $this->log_slipok( $uri, $http_code, $body, null );
 
         if ( empty( $body['success'] ) ) {
             $reason = $body['message'] ?? 'อ่านสลิปไม่ได้';
@@ -130,7 +135,7 @@ class PromptPay_Slip_Verify {
         return [ 'success' => false, 'message' => $message ];
     }
 
-    private function log_slipok( $response, ?string $wp_error ): void {
+    private function log_slipok( string $uri, ?int $http_code, ?array $body, ?string $curl_error ): void {
         $upload_dir = wp_upload_dir();
         $log_dir    = trailingslashit( $upload_dir['basedir'] ) . 'slips';
 
@@ -141,16 +146,18 @@ class PromptPay_Slip_Verify {
         $log_file = $log_dir . '/slip-log-' . wp_date( 'Y-m-d' ) . '.log';
 
         $entry = [
-            'time' => wp_date( 'Y-m-d H:i:s' ),
+            'time'   => wp_date( 'Y-m-d H:i:s' ),
+            'method' => 'POST',
+            'uri'    => $uri,
         ];
 
-        if ( $wp_error !== null ) {
-            $entry['wp_error'] = $wp_error;
+        if ( $curl_error !== null ) {
+            $entry['curl_error'] = $curl_error;
         } else {
-            $entry['http_code'] = wp_remote_retrieve_response_code( $response );
-            $entry['body']      = json_decode( wp_remote_retrieve_body( $response ), true );
+            $entry['http_code'] = $http_code;
+            $entry['body']      = $body;
         }
 
-        file_put_contents( $log_file, json_encode( $entry, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT ) . "\n---\n", FILE_APPEND | LOCK_EX );
+        file_put_contents( $log_file, json_encode( $entry, JSON_UNESCAPED_UNICODE ) . "\n", FILE_APPEND | LOCK_EX );
     }
 }
