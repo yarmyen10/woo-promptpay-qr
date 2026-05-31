@@ -96,10 +96,13 @@ class PromptPay_Slip_Verify {
         ]);
 
         if ( is_wp_error( $response ) ) {
+            $this->log_slipok( null, $response->get_error_message() );
             return $this->fail( 'เชื่อมต่อ SlipOK API ไม่ได้: ' . $response->get_error_message() );
         }
 
-        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        $raw_body = wp_remote_retrieve_body( $response );
+        $body     = json_decode( $raw_body, true );
+        $this->log_slipok( $response, null );
 
         if ( empty( $body['success'] ) ) {
             $reason = $body['message'] ?? 'อ่านสลิปไม่ได้';
@@ -125,5 +128,29 @@ class PromptPay_Slip_Verify {
 
     private function fail( string $message ): array {
         return [ 'success' => false, 'message' => $message ];
+    }
+
+    private function log_slipok( $response, ?string $wp_error ): void {
+        $upload_dir = wp_upload_dir();
+        $log_dir    = trailingslashit( $upload_dir['basedir'] ) . 'slips';
+
+        if ( ! is_dir( $log_dir ) ) {
+            wp_mkdir_p( $log_dir );
+        }
+
+        $log_file = $log_dir . '/slip-log-' . wp_date( 'Y-m-d' ) . '.log';
+
+        $entry = [
+            'time' => wp_date( 'Y-m-d H:i:s' ),
+        ];
+
+        if ( $wp_error !== null ) {
+            $entry['wp_error'] = $wp_error;
+        } else {
+            $entry['http_code'] = wp_remote_retrieve_response_code( $response );
+            $entry['body']      = json_decode( wp_remote_retrieve_body( $response ), true );
+        }
+
+        file_put_contents( $log_file, json_encode( $entry, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT ) . "\n---\n", FILE_APPEND | LOCK_EX );
     }
 }
