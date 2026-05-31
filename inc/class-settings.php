@@ -25,8 +25,9 @@ class PromptPay_Settings {
     }
 
     public static function register_options(): void {
-        register_setting( self::OPTION_GROUP, 'promptpay_phone',      [ 'sanitize_callback' => 'sanitize_text_field' ] );
-        register_setting( self::OPTION_GROUP, 'promptpay_slipok_key', [ 'sanitize_callback' => 'sanitize_text_field' ] );
+        register_setting( self::OPTION_GROUP, 'promptpay_phone',             [ 'sanitize_callback' => 'sanitize_text_field' ] );
+        register_setting( self::OPTION_GROUP, 'promptpay_slipok_key',        [ 'sanitize_callback' => 'sanitize_text_field' ] );
+        register_setting( self::OPTION_GROUP, 'promptpay_slipok_branch_id',  [ 'sanitize_callback' => 'sanitize_text_field' ] );
     }
 
     public static function render_page(): void {
@@ -52,6 +53,17 @@ class PromptPay_Settings {
                         </td>
                     </tr>
                     <tr>
+                        <th scope="row"><label for="promptpay_slipok_branch_id">SlipOK Branch ID</label></th>
+                        <td>
+                            <input type="text"
+                                   id="promptpay_slipok_branch_id"
+                                   name="promptpay_slipok_branch_id"
+                                   value="<?= esc_attr( get_option( 'promptpay_slipok_branch_id' ) ) ?>"
+                                   class="regular-text" />
+                            <p class="description">Branch ID ที่ใช้ใน URL — ดูได้จาก dashboard ของ slipok.com</p>
+                        </td>
+                    </tr>
+                    <tr>
                         <th scope="row"><label for="promptpay_slipok_key">SlipOK API Key</label></th>
                         <td>
                             <input type="text"
@@ -60,6 +72,7 @@ class PromptPay_Settings {
                                    value="<?= esc_attr( get_option( 'promptpay_slipok_key' ) ) ?>"
                                    class="regular-text" />
                             <p class="description">
+                                API Key สำหรับ header <code>x-authorization</code> —
                                 สมัครฟรีได้ที่ <a href="https://slipok.com" target="_blank">slipok.com</a>
                                 (ฟรี 100 ครั้ง/เดือน) — ถ้าไม่ใส่ ระบบจะรอ Admin อนุมัติแทน
                             </p>

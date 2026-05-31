@@ -11,10 +11,12 @@ class PromptPay_Slip_Verify {
     public  const META_KEY   = '_promptpay_slip_bill';
 
     private string $api_key;
+    private string $branch_id;
 
     public function __construct() {
-        $this->api_key  = (string) get_option( 'promptpay_slipok_key', '' );
-        $this->endpoint = (string) get_option( 'promptpay_slipok_endpoint', self::SLIPOK_API_DEFAULT );
+        $this->api_key   = (string) get_option( 'promptpay_slipok_key', '' );
+        $this->branch_id = (string) get_option( 'promptpay_slipok_branch_id', $this->api_key );
+        $this->endpoint  = (string) get_option( 'promptpay_slipok_endpoint', self::SLIPOK_API_DEFAULT );
         if ( $this->endpoint === '' ) {
             $this->endpoint = self::SLIPOK_API_DEFAULT;
         }
@@ -87,12 +89,20 @@ class PromptPay_Slip_Verify {
      * ตรวจสอบสลิปผ่าน SlipOK API
      */
     private function verify_via_slipok( string $tmp_file, float $expected_amount ): array {
-        $uri = trailingslashit( $this->endpoint ) . $this->api_key;
+        $uri    = trailingslashit( $this->endpoint ) . $this->branch_id;
+        $fields = [
+            'files' => new CURLFile( $tmp_file ),
+            'log'   => 'true',
+        ];
+        if ( $expected_amount > 0 ) {
+            $fields['amount'] = (string) $expected_amount;
+        }
 
         $ch = curl_init( $uri );
         curl_setopt_array( $ch, [
             CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => [ 'files' => new CURLFile( $tmp_file ), 'log' => 'true' ],
+            CURLOPT_POSTFIELDS     => $fields,
+            CURLOPT_HTTPHEADER     => [ 'x-authorization: ' . $this->api_key ],
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 30,
         ]);
@@ -114,13 +124,7 @@ class PromptPay_Slip_Verify {
             return $this->fail( 'สลิปไม่ถูกต้อง: ' . $reason );
         }
 
-        $slip_amount = floatval( $body['data']['amount'] ?? 0 );
-
-        if ( $expected_amount > 0 && $slip_amount !== $expected_amount ) {
-            return $this->fail(
-                sprintf( 'ยอดเงินในสลิป (%.2f) ไม่ตรงกับยอดสั่งซื้อ (%.2f)', $slip_amount, $expected_amount )
-            );
-        }
+        // Amount check delegated to SlipOK via the `amount` field above.
 
         return $this->ok( 'ชำระเงินสำเร็จ! ขอบคุณครับ', $body['data'] );
     }
