@@ -37,6 +37,7 @@ class PromptPay_REST_API {
             'args'                => [
                 'phone'            => [ 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field' ],
                 'slipok_key'       => [ 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field' ],
+                'slipok_branch_id' => [ 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field' ],
                 'slipok_endpoint'  => [ 'type' => 'string', 'sanitize_callback' => 'esc_url_raw' ],
             ],
         ]);
@@ -101,6 +102,7 @@ class PromptPay_REST_API {
         return rest_ensure_response([
             'phone'           => $gateway ? $gateway->get_option('phone')           : '',
             'slipok_key'      => $gateway ? $gateway->get_option('slipok_key')      : '',
+            'slipok_branch_id' => get_option( 'promptpay_slipok_branch_id', '' ),
             'slipok_endpoint' => $gateway ? $gateway->get_option('slipok_endpoint') : '',
         ]);
     }
@@ -123,8 +125,9 @@ class PromptPay_REST_API {
 
         // Sync standalone options read by PromptPay_Slip_Verify
         if ( isset( $settings['phone'] ) )           update_option( 'promptpay_phone',            $settings['phone'] );
-        if ( isset( $settings['slipok_key'] ) )      update_option( 'promptpay_slipok_key',       $settings['slipok_key'] );
-        if ( isset( $settings['slipok_endpoint'] ) ) update_option( 'promptpay_slipok_endpoint',  $settings['slipok_endpoint'] );
+        if ( isset( $settings['slipok_key'] ) )       update_option( 'promptpay_slipok_key',        $settings['slipok_key'] );
+        if ( isset( $settings['slipok_endpoint'] ) )  update_option( 'promptpay_slipok_endpoint',   $settings['slipok_endpoint'] );
+        if ( $req->has_param('slipok_branch_id') )    update_option( 'promptpay_slipok_branch_id',  $req->get_param('slipok_branch_id') );
 
         return rest_ensure_response([ 'success' => true, 'settings' => $settings ]);
     }
