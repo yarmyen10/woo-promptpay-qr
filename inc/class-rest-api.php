@@ -190,7 +190,7 @@ class PromptPay_REST_API {
         exit;
     }
 
-    /** DELETE /slip/{order_id}/{bill} — ลบไฟล์สลิปจาก disk และล้าง order meta */
+    /** DELETE /slip/{order_id}/{bill} — ลบไฟล์สลิปจาก disk, ล้าง slip meta และ reset bill meta */
     public static function delete_slip( WP_REST_Request $req ): WP_REST_Response {
         $order_id = (int) $req->get_param('order_id');
         $bill     = (int) $req->get_param('bill');
@@ -200,6 +200,7 @@ class PromptPay_REST_API {
             return new WP_REST_Response( [ 'success' => false, 'message' => 'ไม่พบ Order' ], 404 );
         }
 
+        // ลบไฟล์สลิปจาก disk
         $relative = PromptPay_Slip_Verify::get_slip_path( $order_id, $bill );
         if ( $relative ) {
             $upload_dir = wp_upload_dir();
@@ -209,7 +210,13 @@ class PromptPay_REST_API {
             }
         }
 
+        // ล้าง slip path meta (plugin)
         $order->delete_meta_data( PromptPay_Slip_Verify::META_KEY . $bill );
+
+        // reset bill meta (child theme)
+        $order->update_meta_data( "_bill{$bill}_status",  'pending' );
+        $order->update_meta_data( "_bill{$bill}_paid_at", '' );
+
         $order->save();
 
         return rest_ensure_response( [ 'success' => true ] );
