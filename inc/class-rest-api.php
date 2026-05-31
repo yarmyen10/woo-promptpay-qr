@@ -28,14 +28,15 @@ class PromptPay_REST_API {
             'permission_callback' => [ self::class, 'is_admin' ],
         ]);
 
-        // POST /config — อัปเดต phone + slipok_key
+        // POST /config — อัปเดต phone + slipok_key + slipok_endpoint
         register_rest_route( self::NAMESPACE, '/config', [
             'methods'             => 'POST',
             'callback'            => [ self::class, 'update_config' ],
             'permission_callback' => [ self::class, 'is_admin' ],
             'args'                => [
-                'phone'      => [ 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field' ],
-                'slipok_key' => [ 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field' ],
+                'phone'            => [ 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field' ],
+                'slipok_key'       => [ 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field' ],
+                'slipok_endpoint'  => [ 'type' => 'string', 'sanitize_callback' => 'esc_url_raw' ],
             ],
         ]);
 
@@ -84,8 +85,9 @@ class PromptPay_REST_API {
     public static function get_config(): WP_REST_Response {
         $gateway = self::gateway();
         return rest_ensure_response([
-            'phone'      => $gateway ? $gateway->get_option('phone')      : '',
-            'slipok_key' => $gateway ? $gateway->get_option('slipok_key') : '',
+            'phone'           => $gateway ? $gateway->get_option('phone')           : '',
+            'slipok_key'      => $gateway ? $gateway->get_option('slipok_key')      : '',
+            'slipok_endpoint' => $gateway ? $gateway->get_option('slipok_endpoint') : '',
         ]);
     }
 
@@ -99,8 +101,16 @@ class PromptPay_REST_API {
         if ( $req->has_param('slipok_key') ) {
             $settings['slipok_key'] = $req->get_param('slipok_key');
         }
+        if ( $req->has_param('slipok_endpoint') ) {
+            $settings['slipok_endpoint'] = $req->get_param('slipok_endpoint');
+        }
 
         update_option( 'woocommerce_promptpay_qr_settings', $settings );
+
+        // Sync standalone options read by PromptPay_Slip_Verify
+        if ( isset( $settings['phone'] ) )           update_option( 'promptpay_phone',            $settings['phone'] );
+        if ( isset( $settings['slipok_key'] ) )      update_option( 'promptpay_slipok_key',       $settings['slipok_key'] );
+        if ( isset( $settings['slipok_endpoint'] ) ) update_option( 'promptpay_slipok_endpoint',  $settings['slipok_endpoint'] );
 
         return rest_ensure_response([ 'success' => true, 'settings' => $settings ]);
     }

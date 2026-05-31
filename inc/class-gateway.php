@@ -8,8 +8,9 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  */
 class PromptPay_Gateway extends WC_Payment_Gateway {
 
-    public string $phone      = '';
-    public string $slipok_key = '';
+    public string $phone            = '';
+    public string $slipok_key       = '';
+    public string $slipok_endpoint  = '';
 
     public function __construct() {
         $this->id                 = 'promptpay_qr';
@@ -23,8 +24,9 @@ class PromptPay_Gateway extends WC_Payment_Gateway {
 
         $this->title       = $this->get_option( 'title' );
         $this->description = $this->get_option( 'description' );
-        $this->phone       = $this->get_option( 'phone' );
-        $this->slipok_key  = $this->get_option( 'slipok_key' );
+        $this->phone            = $this->get_option( 'phone' );
+        $this->slipok_key       = $this->get_option( 'slipok_key' );
+        $this->slipok_endpoint  = $this->get_option( 'slipok_endpoint' );
 
         // Hook บันทึกจาก WooCommerce Admin
         add_action(
@@ -43,8 +45,9 @@ class PromptPay_Gateway extends WC_Payment_Gateway {
      * Sync ค่าจาก WooCommerce → Custom Options
      */
     public function sync_to_custom_options(): void {
-        update_option( 'promptpay_phone',      $this->get_option('phone') );
-        update_option( 'promptpay_slipok_key', $this->get_option('slipok_key') );
+        update_option( 'promptpay_phone',             $this->get_option('phone') );
+        update_option( 'promptpay_slipok_key',        $this->get_option('slipok_key') );
+        update_option( 'promptpay_slipok_endpoint',   $this->get_option('slipok_endpoint') );
     }
 
     public function get_title(): string {
@@ -102,6 +105,13 @@ class PromptPay_Gateway extends WC_Payment_Gateway {
                 'title'       => 'SlipOK API Key',
                 'type'        => 'text',
                 'description' => 'รับได้ฟรีที่ <a href="https://slipok.com" target="_blank">slipok.com</a> (100 ครั้ง/เดือน) — ถ้าว่างจะรอ Admin อนุมัติแทน',
+            ],
+            'slipok_endpoint' => [
+                'title'       => 'SlipOK API Endpoint',
+                'type'        => 'text',
+                'placeholder' => 'https://api.slipok.com/api/line/apikey/',
+                'description' => 'URL ของ SlipOK API — เว้นว่างเพื่อใช้ค่าเริ่มต้น',
+                'desc_tip'    => true,
             ],
         ];
     }

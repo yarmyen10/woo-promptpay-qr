@@ -2,45 +2,46 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## What this is
-
-A WordPress plugin (`PromptPay QR Shortcode`) that integrates Thai PromptPay QR payments with WooCommerce. There is no build step, no package manager, and no test suite — it's plain PHP loaded by WordPress. To "run" it you drop the directory into `wp-content/plugins/` of a WordPress install and activate it. The default branch is `master`; ongoing work happens on `deployment`.
-
-External services it talks to:
-- `https://promptpay.io/{phone}/{amount}` — generates the QR image (no auth).
-- `https://api.slipok.com/api/line/apikey/{key}` — verifies uploaded slips (free 100 calls/month).
-
 ## Architecture
 
-`promptpay-qr.php` is the entry point. It registers an `spl_autoload_register` map (class name → `inc/class-*.php`) and boots `PromptPay_Plugin::init` on `plugins_loaded`. **Adding a new class requires adding it to that map** — there is no PSR-4 autoloader.
+WooCommerce payment gateway plugin. Entry point `promptpay-qr.php` bootstraps a singleton `PromptPay_Plugin::init()` that registers six service classes via `spl_autoload_register` (maps class names to `inc/class-*.php` files).
 
-The plugin exposes the same payment flow through three parallel surfaces, which is important to know before changing slip-handling logic:
+```
+PromptPay_Plugin
+├── PromptPay_Settings    → Admin settings UI (phone, slipok_key)
+├── PromptPay_Assets      → Enqueue CSS/JS
+├── PromptPay_Shortcode   → [promptpay_qr] shortcode → inc/templates/payment-form.php
+├── PromptPay_Ajax        → AJAX slip upload handler (wp_ajax_*)
+├── PromptPay_REST_API    → REST endpoints (see below)
+└── PromptPay_Gateway     → WooCommerce payment method registration
+```
 
-1. **WooCommerce Gateway** (`class-gateway.php`) — `PromptPay_Gateway extends WC_Payment_Gateway`, registered via the `woocommerce_payment_gateways` filter. Appears in WooCommerce → Settings → Payments. Settings are stored in `woocommerce_promptpay_qr_settings`.
-2. **Shortcode** (`class-shortcode.php`) — `[promptpay_qr]` renders `inc/templates/payment-form.php` standalone (uses cart total if no `amount` attribute).
-3. **REST API** (`class-rest-api.php`) — namespace `promptpay/v1`: `/config`, `/qr`, `/verify-slip`, `/slip/{order_id}/{bill}`, `/me`. Used by an external admin UI ("TailAdmin"); permission callback `can_view_slip` accepts both WP nonce **and** Application Password Basic auth.
+**HPOS compatible** — declares `custom_order_tables` feature support.
 
-### Slip storage
+## REST Endpoints
 
-- **Slip-saving is centralized** in `PromptPay_Slip_Verify::save_slip_file()` (static). AJAX, REST, and the gateway all call this single helper. It writes `wp-content/uploads/slips/Y/m/slip-{order_id}-bill{N}-{timestamp}.jpg`, drops a `.htaccess deny from all` next to it, and stores the relative path in order meta `_promptpay_slip_bill{N}` via `$order->update_meta_data()` + `$order->save()` (HPOS-compatible — never use `update_post_meta` for slip meta).
-- **Reading slip path**: use `PromptPay_Slip_Verify::get_slip_path( $order_id, $bill )` — wraps `$order->get_meta()`.
-- **HPOS compatibility** is declared in `promptpay-qr.php` via `FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true)` on `before_woocommerce_init`. If you add code paths that touch order data, keep them HPOS-safe (use `wc_get_order()` + the order CRUD API, not direct `wp_postmeta` access).
+**Namespace**: `/wp-json/promptpay/v1/`
 
-### Duplicated logic (be careful when editing)
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/config` | Get phone + slipok_key |
+| POST | `/config` | Update settings |
+| GET | `/qr?amount=N` | Generate PromptPay QR URL |
+| POST | `/verify-slip` | Verify payment slip via SlipOK API |
+| GET | `/slip/{id}/{bill}` | Retrieve slip object |
 
-- **Settings** live in two places: the Gateway form fields *and* a standalone Settings page (`class-settings.php` → `promptpay_phone`, `promptpay_slipok_key`). The Gateway's `sync_to_custom_options` mirrors its values into the standalone option keys on save. `PromptPay_Slip_Verify` reads `promptpay_slipok_key`, while the REST `/config` reads from the gateway. Don't break this sync.
-- **Order completion** also differs: `class-ajax.php::complete_order` always calls `payment_complete()`. `class-rest-api.php::complete_order` is multi-bill aware: `bill === 1` → `on-hold`, `bill >= 2` → `payment_complete()` + `processing`.
+## Key Files
 
-### Slip serving (recently churning)
-
-`PromptPay_REST_API::serve_slip` is the area of recent WIP commits ("res filepath 404", "fix filename slip-"). It reads the slip path via `PromptPay_Slip_Verify::get_slip_path()`, resolves to `wp_upload_dir()['basedir'] . '/' . $relative`, and `readfile()`s with `mime_content_type`. The error path returns a `WP_Error` (not `wp_send_json_error`, which is wrong for REST). If you see a 404 here, check that the meta value is a relative path (not absolute), that the file actually exists at `basedir + relative`, and that the `bill` number matches what was stored.
-
-### Phone normalization
-
-`PromptPay_QR_Generator::normalize_phone` currently only strips non-digits. The `'66' . ltrim($phone, '0')` country-code prefix is **intentionally commented out** — promptpay.io accepts the local format. Don't re-enable it without testing against the actual QR rendering.
+| File | Purpose |
+|------|---------|
+| `inc/class-qr-generator.php` | Generates PromptPay QR payload/URL |
+| `inc/class-slip-verify.php` | Calls SlipOK external API to verify slip images |
+| `inc/class-gateway.php` | WooCommerce `WC_Payment_Gateway` subclass |
+| `inc/templates/payment-form.php` | Shortcode HTML (QR display + drag-drop upload) |
+| `assets/js/promptpay.js` | Frontend: drag-drop, image preview, AJAX submit |
 
 ## Conventions
 
-- All PHP files start with `if ( ! defined( 'ABSPATH' ) ) exit;` — keep this guard on any new file.
-- All user-facing strings are in Thai. Don't translate them when refactoring.
-- Use the `PROMPTPAY_DIR` / `PROMPTPAY_URL` / `PROMPTPAY_VERSION` constants instead of recomputing paths.
+- All AJAX calls use nonce verification (`wp_verify_nonce`)
+- SlipOK API key stored in WP options via `PromptPay_Settings`, never hardcoded
+- Adding new functionality: create a new `inc/class-*.php` and register it in `PromptPay_Plugin::init()`

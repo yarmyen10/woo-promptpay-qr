@@ -7,13 +7,17 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  */
 class PromptPay_Slip_Verify {
 
-    private const SLIPOK_API = 'https://api.slipok.com/api/line/apikey/';
+    private const SLIPOK_API_DEFAULT = 'https://api.slipok.com/api/line/apikey/';
     public  const META_KEY   = '_promptpay_slip_bill';
 
     private string $api_key;
 
     public function __construct() {
-        $this->api_key = (string) get_option( 'promptpay_slipok_key', '' );
+        $this->api_key  = (string) get_option( 'promptpay_slipok_key', '' );
+        $this->endpoint = (string) get_option( 'promptpay_slipok_endpoint', self::SLIPOK_API_DEFAULT );
+        if ( $this->endpoint === '' ) {
+            $this->endpoint = self::SLIPOK_API_DEFAULT;
+        }
     }
 
     /**
@@ -83,7 +87,7 @@ class PromptPay_Slip_Verify {
      * ตรวจสอบสลิปผ่าน SlipOK API
      */
     private function verify_via_slipok( string $tmp_file, float $expected_amount ): array {
-        $response = wp_remote_post( self::SLIPOK_API . $this->api_key, [
+        $response = wp_remote_post( trailingslashit( $this->endpoint ) . $this->api_key, [
             'timeout' => 30,
             'body'    => [
                 'files' => new CURLFile( $tmp_file ),
