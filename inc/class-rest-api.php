@@ -72,6 +72,12 @@ class PromptPay_REST_API {
             'permission_callback' => [ self::class, 'is_admin' ],
         ]);
 
+        // POST /re-verify/{order_id}/{bill} — ส่งสลิปที่เก็บไว้ไปตรวจสอบ SlipOK อีกครั้ง
+        register_rest_route( self::NAMESPACE, '/re-verify/(?P<order_id>\d+)/(?P<bill>\d+)', [
+            'methods'             => 'POST',
+            'callback'            => [ self::class, 're_verify_slip' ],
+            'permission_callback' => [ self::class, 'is_admin' ],
+        ]);
 
         register_rest_route( self::NAMESPACE, '/me', [
             'methods'             => 'GET',
@@ -184,8 +190,17 @@ class PromptPay_REST_API {
             return new WP_Error( 'slip_not_found', 'ไม่พบไฟล์สลิป', [ 'status' => 404 ] );
         }
 
-        header( 'Content-Type: '   . mime_content_type( $filepath ) );
+        // ล้าง output buffer ทั้งหมดที่ WordPress เปิดทิ้งไว้
+        // (ถ้าไม่ล้าง buffered content จะ prefix ไปกับ binary ทำให้ image เสีย)
+        while ( ob_get_level() ) {
+            ob_end_clean();
+        }
+
+        $mime = mime_content_type( $filepath ) ?: 'application/octet-stream';
+
+        header( 'Content-Type: '   . $mime );
         header( 'Content-Length: ' . filesize( $filepath ) );
+        header( 'Cache-Control: private, no-transform' );
         readfile( $filepath );
         exit;
     }
@@ -220,6 +235,49 @@ class PromptPay_REST_API {
         $order->save();
 
         return rest_ensure_response( [ 'success' => true ] );
+    }
+
+    /** POST /re-verify/{order_id}/{bill} — ส่งสลิปที่เก็บไว้ไปตรวจสอบ SlipOK อีกครั้ง */
+    public static function re_verify_slip( WP_REST_Request $req ): WP_REST_Response {
+        $order_id = (int) $req->get_param('order_id');
+        $bill     = (int) $req->get_param('bill');
+
+        if ( $bill !== 1 && $bill !== 2 ) {
+            return new WP_REST_Response( [ 'success' => false, 'message' => 'bill ต้องเป็น 1 หรือ 2' ], 400 );
+        }
+
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) {
+            return new WP_REST_Response( [ 'success' => false, 'message' => 'ไม่พบ Order' ], 404 );
+        }
+
+        $relative = PromptPay_Slip_Verify::get_slip_path( $order_id, $bill );
+        if ( ! $relative ) {
+            return new WP_REST_Response( [ 'success' => false, 'message' => 'ไม่พบสลิปใน Order นี้' ], 404 );
+        }
+
+        $upload_dir = wp_upload_dir();
+        $filepath   = $upload_dir['basedir'] . '/' . $relative;
+        if ( ! file_exists( $filepath ) ) {
+            return new WP_REST_Response( [ 'success' => false, 'message' => 'ไม่พบไฟล์สลิปบน server' ], 404 );
+        }
+
+        $amount   = self::get_order_amount( $order_id );
+        $verifier = new PromptPay_Slip_Verify();
+        $result   = $verifier->verify( $filepath, $amount );
+
+        if ( $result['success'] ) {
+            self::complete_order( $order_id, $bill );
+            return rest_ensure_response( [
+                'success' => true,
+                'message' => $result['message'],
+            ] );
+        }
+
+        return new WP_REST_Response( [
+            'success' => false,
+            'message' => $result['message'],
+        ], 422 );
     }
 
     // =========================================================
