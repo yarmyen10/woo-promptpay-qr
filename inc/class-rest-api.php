@@ -9,7 +9,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *   POST /wp-json/promptpay/v1/config
  *   GET  /wp-json/promptpay/v1/qr?amount=500
  *   POST /wp-json/promptpay/v1/verify-slip
- *   GET  /wp-json/promptpay/v1/slip/{order_id}/{bill}
+ *   GET    /wp-json/promptpay/v1/slip/{order_id}/{bill}
+ *   DELETE /wp-json/promptpay/v1/slip/{order_id}/{bill}
  */
 class PromptPay_REST_API {
 
@@ -62,6 +63,13 @@ class PromptPay_REST_API {
             'methods'             => 'GET',
             'callback'            => [ self::class, 'serve_slip' ],
             'permission_callback' => [ self::class, 'can_view_slip' ],
+        ]);
+
+        // DELETE /slip/{order_id}/{bill} — ลบไฟล์สลิปและ order meta
+        register_rest_route( self::NAMESPACE, '/slip/(?P<order_id>\d+)/(?P<bill>\d+)', [
+            'methods'             => 'DELETE',
+            'callback'            => [ self::class, 'delete_slip' ],
+            'permission_callback' => [ self::class, 'is_admin' ],
         ]);
 
 
@@ -180,6 +188,31 @@ class PromptPay_REST_API {
         header( 'Content-Length: ' . filesize( $filepath ) );
         readfile( $filepath );
         exit;
+    }
+
+    /** DELETE /slip/{order_id}/{bill} — ลบไฟล์สลิปจาก disk และล้าง order meta */
+    public static function delete_slip( WP_REST_Request $req ): WP_REST_Response {
+        $order_id = (int) $req->get_param('order_id');
+        $bill     = (int) $req->get_param('bill');
+
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) {
+            return new WP_REST_Response( [ 'success' => false, 'message' => 'ไม่พบ Order' ], 404 );
+        }
+
+        $relative = PromptPay_Slip_Verify::get_slip_path( $order_id, $bill );
+        if ( $relative ) {
+            $upload_dir = wp_upload_dir();
+            $filepath   = $upload_dir['basedir'] . '/' . $relative;
+            if ( file_exists( $filepath ) ) {
+                wp_delete_file( $filepath );
+            }
+        }
+
+        $order->delete_meta_data( PromptPay_Slip_Verify::META_KEY . $bill );
+        $order->save();
+
+        return rest_ensure_response( [ 'success' => true ] );
     }
 
     // =========================================================
