@@ -365,7 +365,7 @@ class PromptPay_REST_API {
             return (int) $order->get_customer_id() === get_current_user_id();
         }
 
-        // แบบที่ 2 — Application Password (เรียกจาก TailAdmin)
+        // แบบที่ 2 — Application Password (เรียกจาก Jaonaichan)
         $auth = self::read_auth_header( $req );
         if ( $auth && str_starts_with( $auth, 'Basic ' ) ) {
             $credentials = base64_decode( substr( $auth, 6 ) );
