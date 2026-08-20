@@ -47,6 +47,47 @@ class PromptPay_Slip_Verify {
     }
 
     /**
+     * Rate limit — max 5 uploads per order per 60 min
+     */
+    public static function is_rate_limited( int $order_id ): bool {
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) return false;
+
+        $now       = time();
+        $window    = 3600;
+        $max       = 5;
+        $attempts  = (array) json_decode( $order->get_meta( '_slip_attempts', true ) ?: '[]', true );
+        $attempts  = array_filter( $attempts, fn( $t ) => ( $now - $t ) < $window );
+
+        if ( count( $attempts ) >= $max ) return true;
+
+        $attempts[] = $now;
+        $order->update_meta_data( '_slip_attempts', wp_json_encode( array_values( $attempts ) ) );
+        $order->save();
+        return false;
+    }
+
+    /**
+     * Dedup — ตรวจว่า hash สลิปนี้เคยใช้แล้วหรือยัง
+     */
+    public static function is_duplicate_slip( string $hash ): bool {
+        $hashes = (array) get_option( 'promptpay_slip_hashes', [] );
+        return isset( $hashes[ $hash ] );
+    }
+
+    /**
+     * บันทึก hash สลิปที่ผ่านแล้ว (เก็บ 90 วัน)
+     */
+    public static function mark_slip_used( string $hash ): void {
+        $hashes = (array) get_option( 'promptpay_slip_hashes', [] );
+        $cutoff = time() - ( 90 * DAY_IN_SECONDS );
+        // prune old entries
+        $hashes = array_filter( $hashes, fn( $t ) => $t > $cutoff );
+        $hashes[ $hash ] = time();
+        update_option( 'promptpay_slip_hashes', $hashes, false );
+    }
+
+    /**
      * บันทึกไฟล์สลิปลง disk + เก็บ relative path ใน order meta (HPOS-compatible)
      * Returns false ถ้า move_uploaded_file ล้มเหลว หรือหา order ไม่เจอ
      */
@@ -134,6 +175,13 @@ class PromptPay_Slip_Verify {
             $our_phone = (string) get_option( 'promptpay_phone', '' );
             if ( $our_phone && ! $this->phones_match( $our_phone, $proxy_value ) ) {
                 return $this->fail( 'สลิปโอนไปยังบัญชีอื่น ไม่ใช่บัญชีของร้าน' );
+            }
+        }
+
+        if ( $proxy_type === 'BILLERID' && $proxy_value ) {
+            $our_biller = (string) get_option( 'promptpay_biller_id', '' );
+            if ( $our_biller && $proxy_value !== $our_biller ) {
+                return $this->fail( 'สลิปโอนไปยัง Biller อื่น ไม่ใช่บัญชีของร้าน' );
             }
         }
 

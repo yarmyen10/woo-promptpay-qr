@@ -29,7 +29,7 @@ class PromptPay_REST_API {
             'permission_callback' => [ self::class, 'is_admin' ],
         ]);
 
-        // POST /config — อัปเดต phone + slipok_key + slipok_endpoint
+        // POST /config — อัปเดต phone + slipok_key + slipok_endpoint + qr_mode + biller_id
         register_rest_route( self::NAMESPACE, '/config', [
             'methods'             => 'POST',
             'callback'            => [ self::class, 'update_config' ],
@@ -39,6 +39,8 @@ class PromptPay_REST_API {
                 'slipok_key'       => [ 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field' ],
                 'slipok_branch_id' => [ 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field' ],
                 'slipok_endpoint'  => [ 'type' => 'string', 'sanitize_callback' => 'esc_url_raw' ],
+                'qr_mode'          => [ 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field', 'enum' => [ 'phone', 'biller' ] ],
+                'biller_id'        => [ 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field' ],
             ],
         ]);
 
@@ -100,10 +102,12 @@ class PromptPay_REST_API {
     public static function get_config(): WP_REST_Response {
         $gateway = self::gateway();
         return rest_ensure_response([
-            'phone'           => $gateway ? $gateway->get_option('phone')           : '',
-            'slipok_key'      => $gateway ? $gateway->get_option('slipok_key')      : '',
+            'phone'            => $gateway ? $gateway->get_option('phone')           : '',
+            'slipok_key'       => $gateway ? $gateway->get_option('slipok_key')      : '',
             'slipok_branch_id' => get_option( 'promptpay_slipok_branch_id', '' ),
-            'slipok_endpoint' => $gateway ? $gateway->get_option('slipok_endpoint') : '',
+            'slipok_endpoint'  => $gateway ? $gateway->get_option('slipok_endpoint') : '',
+            'qr_mode'          => get_option( 'promptpay_qr_mode', 'phone' ),
+            'biller_id'        => get_option( 'promptpay_biller_id', '' ),
         ]);
     }
 
@@ -111,39 +115,38 @@ class PromptPay_REST_API {
     public static function update_config( WP_REST_Request $req ): WP_REST_Response {
         $settings = get_option( 'woocommerce_promptpay_qr_settings', [] );
 
-        if ( $req->has_param('phone') ) {
-            $settings['phone'] = $req->get_param('phone');
-        }
-        if ( $req->has_param('slipok_key') ) {
-            $settings['slipok_key'] = $req->get_param('slipok_key');
-        }
-        if ( $req->has_param('slipok_endpoint') ) {
-            $settings['slipok_endpoint'] = $req->get_param('slipok_endpoint');
-        }
+        if ( $req->has_param('phone') )           $settings['phone']           = $req->get_param('phone');
+        if ( $req->has_param('slipok_key') )       $settings['slipok_key']      = $req->get_param('slipok_key');
+        if ( $req->has_param('slipok_endpoint') )  $settings['slipok_endpoint'] = $req->get_param('slipok_endpoint');
 
         update_option( 'woocommerce_promptpay_qr_settings', $settings );
 
-        // Sync standalone options read by PromptPay_Slip_Verify
-        if ( isset( $settings['phone'] ) )           update_option( 'promptpay_phone',            $settings['phone'] );
-        if ( isset( $settings['slipok_key'] ) )       update_option( 'promptpay_slipok_key',        $settings['slipok_key'] );
-        if ( isset( $settings['slipok_endpoint'] ) )  update_option( 'promptpay_slipok_endpoint',   $settings['slipok_endpoint'] );
-        if ( $req->has_param('slipok_branch_id') )    update_option( 'promptpay_slipok_branch_id',  $req->get_param('slipok_branch_id') );
+        // Sync standalone options
+        if ( isset( $settings['phone'] ) )          update_option( 'promptpay_phone',           $settings['phone'] );
+        if ( isset( $settings['slipok_key'] ) )      update_option( 'promptpay_slipok_key',       $settings['slipok_key'] );
+        if ( isset( $settings['slipok_endpoint'] ) ) update_option( 'promptpay_slipok_endpoint',  $settings['slipok_endpoint'] );
+        if ( $req->has_param('slipok_branch_id') )   update_option( 'promptpay_slipok_branch_id', $req->get_param('slipok_branch_id') );
+        if ( $req->has_param('qr_mode') )            update_option( 'promptpay_qr_mode',          $req->get_param('qr_mode') );
+        if ( $req->has_param('biller_id') )          update_option( 'promptpay_biller_id',        $req->get_param('biller_id') );
 
         return rest_ensure_response([ 'success' => true, 'settings' => $settings ]);
     }
 
     /** GET /qr?amount=500 */
     public static function get_qr( WP_REST_Request $req ): WP_REST_Response {
-        $gateway = self::gateway();
-        $phone   = $gateway ? $gateway->get_option('phone') : '';
-        $amount  = (float) $req->get_param('amount');
-        $qr_url  = PromptPay_QR_Generator::generate( $phone, $amount );
+        $gateway   = self::gateway();
+        $qr_mode   = get_option( 'promptpay_qr_mode', 'phone' );
+        $amount    = (float) $req->get_param('amount');
 
-        return rest_ensure_response([
-            'phone'  => $phone,
-            'amount' => $amount,
-            'qr_url' => $qr_url,
-        ]);
+        if ( $qr_mode === 'biller' ) {
+            $biller_id = get_option( 'promptpay_biller_id', '' );
+            $qr_url    = PromptPay_QR_Generator::generate( $biller_id, $amount );
+            return rest_ensure_response([ 'mode' => 'biller', 'biller_id' => $biller_id, 'amount' => $amount, 'qr_url' => $qr_url ]);
+        }
+
+        $phone  = $gateway ? $gateway->get_option('phone') : '';
+        $qr_url = PromptPay_QR_Generator::generate( $phone, $amount );
+        return rest_ensure_response([ 'mode' => 'phone', 'phone' => $phone, 'amount' => $amount, 'qr_url' => $qr_url ]);
     }
 
     /** POST /verify-slip */
