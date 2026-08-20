@@ -28,9 +28,21 @@ class PromptPay_Ajax {
         $bill     = intval( $_POST['bill'] ?? 1 );
         $amount   = self::get_bill_amount( $order_id, $bill );
 
-        $mock     = ( defined( 'WP_DEBUG' ) && WP_DEBUG && isset( $_POST['mock_result'] ) )
-                        ? filter_var( $_POST['mock_result'], FILTER_VALIDATE_BOOLEAN )
-                        : null;
+        $mock = ( defined( 'WP_DEBUG' ) && WP_DEBUG && isset( $_POST['mock_result'] ) )
+                    ? filter_var( $_POST['mock_result'], FILTER_VALIDATE_BOOLEAN )
+                    : null;
+
+        $slip_hash = '';
+        if ( $mock === null ) {
+            if ( $order_id && PromptPay_Slip_Verify::is_rate_limited( $order_id ) ) {
+                wp_send_json_error([ 'message' => 'อัปโหลดสลิปบ่อยเกินไป กรุณารอสักครู่' ]);
+            }
+            $slip_hash = md5_file( $slip_tmp ) ?: '';
+            if ( $slip_hash && PromptPay_Slip_Verify::is_duplicate_slip( $slip_hash ) ) {
+                wp_send_json_error([ 'message' => 'สลิปนี้ถูกใช้ไปแล้ว' ]);
+            }
+        }
+
         $verifier = new PromptPay_Slip_Verify();
         $result   = $verifier->verify( $slip_tmp, $amount, $mock );
 
@@ -38,6 +50,7 @@ class PromptPay_Ajax {
         PromptPay_Slip_Verify::save_slip_file( $slip_tmp, $order_id, $bill );
 
         if ( $result['success'] ) {
+            if ( $slip_hash ) PromptPay_Slip_Verify::mark_slip_used( $slip_hash );
             self::set_status(
                 $order_id,
                 'paid-' . $bill,

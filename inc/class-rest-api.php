@@ -164,10 +164,23 @@ class PromptPay_REST_API {
         $mock       = ( defined( 'WP_DEBUG' ) && WP_DEBUG && $mock_param !== null )
                         ? filter_var( $mock_param, FILTER_VALIDATE_BOOLEAN )
                         : null;
+
+        $slip_hash = '';
+        if ( $mock === null ) {
+            if ( $order_id && PromptPay_Slip_Verify::is_rate_limited( $order_id ) ) {
+                return new WP_REST_Response([ 'success' => false, 'message' => 'อัปโหลดสลิปบ่อยเกินไป กรุณารอสักครู่' ], 429);
+            }
+            $slip_hash = md5_file( $slip_tmp ) ?: '';
+            if ( $slip_hash && PromptPay_Slip_Verify::is_duplicate_slip( $slip_hash ) ) {
+                return new WP_REST_Response([ 'success' => false, 'message' => 'สลิปนี้ถูกใช้ไปแล้ว' ], 422);
+            }
+        }
+
         $verifier = new PromptPay_Slip_Verify();
         $result   = $verifier->verify( $slip_tmp, $amount, $mock );
 
         if ( $result['success'] ) {
+            if ( $slip_hash ) PromptPay_Slip_Verify::mark_slip_used( $slip_hash );
             PromptPay_Slip_Verify::save_slip_file( $slip_tmp, $order_id, $bill );
             self::complete_order( $order_id, $bill );
             return rest_ensure_response([

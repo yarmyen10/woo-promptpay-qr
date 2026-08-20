@@ -126,12 +126,45 @@ class PromptPay_Slip_Verify {
             return $this->fail( 'สลิปไม่ถูกต้อง: ' . $reason );
         }
 
-        // Amount check delegated to SlipOK via the `amount` field above.
+        $receiver_proxy = $body['data']['receiver']['proxy'] ?? [];
+        $proxy_type     = $receiver_proxy['type']  ?? '';
+        $proxy_value    = $receiver_proxy['value'] ?? '';
+
+        if ( $proxy_type === 'MSISDN' && $proxy_value ) {
+            $our_phone = (string) get_option( 'promptpay_phone', '' );
+            if ( $our_phone && ! $this->phones_match( $our_phone, $proxy_value ) ) {
+                return $this->fail( 'สลิปโอนไปยังบัญชีอื่น ไม่ใช่บัญชีของร้าน' );
+            }
+        }
 
         return $this->ok( 'ชำระเงินสำเร็จ! ขอบคุณครับ', $body['data'] );
     }
 
+    // ---- Rate limiting + dedup ----
+
+    public static function is_rate_limited( int $order_id, int $limit = 5 ): bool {
+        $key   = 'ppqr_rate_' . $order_id;
+        $count = (int) get_transient( $key );
+        if ( $count >= $limit ) return true;
+        set_transient( $key, $count + 1, HOUR_IN_SECONDS );
+        return false;
+    }
+
+    public static function is_duplicate_slip( string $hash ): bool {
+        return (bool) get_transient( 'ppqr_slip_' . $hash );
+    }
+
+    public static function mark_slip_used( string $hash ): void {
+        set_transient( 'ppqr_slip_' . $hash, 1, 90 * DAY_IN_SECONDS );
+    }
+
     // ---- Helpers ----
+
+    private function phones_match( string $a, string $b ): bool {
+        $norm = fn( string $n ) => substr( preg_replace( '/\D/', '', $n ), -9 );
+        $na = $norm( $a );
+        return $na !== '' && $na === $norm( $b );
+    }
 
     private function ok( string $message, array $data = [] ): array {
         return [ 'success' => true, 'message' => $message, 'data' => $data ];
