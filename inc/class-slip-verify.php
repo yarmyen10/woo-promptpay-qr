@@ -188,24 +188,6 @@ class PromptPay_Slip_Verify {
         return $this->ok( 'ชำระเงินสำเร็จ! ขอบคุณครับ', $body['data'] );
     }
 
-    // ---- Rate limiting + dedup ----
-
-    public static function is_rate_limited( int $order_id, int $limit = 5 ): bool {
-        $key   = 'ppqr_rate_' . $order_id;
-        $count = (int) get_transient( $key );
-        if ( $count >= $limit ) return true;
-        set_transient( $key, $count + 1, HOUR_IN_SECONDS );
-        return false;
-    }
-
-    public static function is_duplicate_slip( string $hash ): bool {
-        return (bool) get_transient( 'ppqr_slip_' . $hash );
-    }
-
-    public static function mark_slip_used( string $hash ): void {
-        set_transient( 'ppqr_slip_' . $hash, 1, 90 * DAY_IN_SECONDS );
-    }
-
     // ---- Helpers ----
 
     private function phones_match( string $a, string $b ): bool {

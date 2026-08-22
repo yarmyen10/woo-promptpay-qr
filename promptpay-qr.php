@@ -17,6 +17,7 @@ define( 'PROMPTPAY_VERSION', '1.0.0' );
 spl_autoload_register( function( $class ) {
     $map = [
         'PromptPay_QR_Generator'  => 'inc/class-qr-generator.php',
+        'KShop_QR_Generator'      => 'inc/class-kshop-qr-generator.php',
         'PromptPay_Slip_Verify'   => 'inc/class-slip-verify.php',
         'PromptPay_Shortcode'     => 'inc/class-shortcode.php',
         'PromptPay_Ajax'          => 'inc/class-ajax.php',

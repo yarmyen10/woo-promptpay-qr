@@ -140,7 +140,7 @@ class PromptPay_REST_API {
 
         if ( $qr_mode === 'biller' ) {
             $biller_id = get_option( 'promptpay_biller_id', '' );
-            $qr_url    = PromptPay_QR_Generator::generate( $biller_id, $amount );
+            $qr_url    = KShop_QR_Generator::generate( $biller_id, $amount );
             return rest_ensure_response([ 'mode' => 'biller', 'biller_id' => $biller_id, 'amount' => $amount, 'qr_url' => $qr_url ]);
         }
 
