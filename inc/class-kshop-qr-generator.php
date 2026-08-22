@@ -3,48 +3,37 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 /**
  * KShop_QR_Generator
- * สร้าง Thai QR Payment (Biller) payload ตาม EMVCo standard
- * พร้อม amount pre-filled และ order ref ต่อ transaction
+ *
+ * สร้าง dynamic K-Shop QR โดยเอา static payload ต้นฉบับมา
+ * เปลี่ยน initiation 11→12 และแทรก tag 54 (amount) แล้ว recalculate CRC
+ * ไม่ rebuild จาก scratch เพื่อรักษา structure ของ K-Shop ครบถ้วน
  */
 class KShop_QR_Generator {
 
-    private const AID    = 'A000000677010112'; // from decoded K-Shop QR
-    private const SUB01  = '010753600031501';   // KBank internal identifier (from decoded QR)
+    // Static K-Shop payload ไม่รวม CRC value (ตัดท้าย 4 hex chars ออก, เหลือ '6304')
+    private const STATIC_BASE = '0002010102110216478772000475103204155303920004751521531343007640052044640122250933100130810016A00000067701011201150107536000315010214KB0000021472450320KPS004KB00000214724531690016A00000067701011301030040214KB0000021472450420KPS004KB00000214724551430014A000000004101001064169710211123456789015204599553037645802TH5910JAONAICHAN6004CITY622505094794393940708422509336304';
+
     private const QR_API = 'https://api.qrserver.com/v1/create-qr-code/';
 
     /**
-     * @param string $biller_id  เช่น "KB000002147245"
+     * @param string $biller_id  ไม่ใช้ (baked ใน STATIC_BASE) — เก็บ signature ไว้ compatible กับ caller
      * @param float  $amount     ยอดเงิน THB
-     * @param string $ref        เลข order สำหรับ reconciliation (max 20 chars)
-     * @return string            URL รูป QR
+     * @param string $ref        ไม่ใช้ในตอนนี้
      */
     public static function generate( string $biller_id, float $amount, string $ref = '' ): string {
-        $merchant = self::tlv( '00', self::AID )
-            . self::tlv( '01', self::SUB01 )
-            . self::tlv( '02', $biller_id )
-            . ( $ref ? self::tlv( '03', substr( $ref, 0, 20 ) ) : '' );
+        // static → dynamic
+        $payload = str_replace( '010211', '010212', self::STATIC_BASE );
 
+        // แทรก tag 54 (amount) ก่อน tag 58 (country)
         $amount_str = number_format( $amount, 2, '.', '' );
+        $amount_tlv = '54' . str_pad( strlen( $amount_str ), 2, '0', STR_PAD_LEFT ) . $amount_str;
+        $payload    = str_replace( '5802TH', $amount_tlv . '5802TH', $payload );
 
-        $payload = self::tlv( '00', '01' )
-            . self::tlv( '01', '12' )              // 12 = dynamic (amount embedded)
-            . self::tlv( '30', $merchant )
-            . self::tlv( '52', '0000' )
-            . self::tlv( '53', '764' )             // THB
-            . self::tlv( '54', $amount_str )
-            . self::tlv( '58', 'TH' )
-            . self::tlv( '59', 'JAONAICHAN' )
-            . self::tlv( '60', 'CITY' )
-            . '6304';                              // CRC tag placeholder
-
+        // คำนวณ CRC ใหม่
         $crc     = self::crc16( $payload );
         $payload .= strtoupper( str_pad( dechex( $crc ), 4, '0', STR_PAD_LEFT ) );
 
         return add_query_arg( [ 'size' => '300x300', 'data' => $payload ], self::QR_API );
-    }
-
-    private static function tlv( string $tag, string $value ): string {
-        return $tag . str_pad( strlen( $value ), 2, '0', STR_PAD_LEFT ) . $value;
     }
 
     private static function crc16( string $data ): int {
